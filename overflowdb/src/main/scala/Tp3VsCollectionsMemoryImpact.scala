@@ -1,5 +1,5 @@
 import Benchmarks.loadGratefulDead
-import io.shiftleft.overflowdb.testdomains.gratefuldead.GratefulDead
+import io.shiftleft.overflowdb.traversals.testdomains.gratefuldead.GratefulDead
 import java.util.{Iterator => JIterator}
 import org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.__.__
 import org.apache.tinkerpop.gremlin.structure.{Direction, Vertex}

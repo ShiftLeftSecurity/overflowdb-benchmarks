@@ -1,5 +1,5 @@
 import Benchmarks.{loadGratefulDead, timed}
-import io.shiftleft.overflowdb.testdomains.gratefuldead.GratefulDead
+import io.shiftleft.overflowdb.traversals.testdomains.gratefuldead.GratefulDead
 import org.apache.tinkerpop.gremlin.structure.{Direction, Graph}
 import scala.jdk.CollectionConverters._
 
