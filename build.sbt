@@ -16,6 +16,7 @@ lazy val tinkergraph = project.in(file("tinkergraph")).dependsOn(root)
 lazy val janusgraph = project.in(file("janusgraph")).dependsOn(root)
 lazy val orientdb = project.in(file("orientdb")).dependsOn(root)
 lazy val neo4j = project.in(file("neo4j")).dependsOn(root)
+lazy val jmhTests = project.in(file("jmh-tests"))
 
 lazy val stageAll = taskKey[Unit]("stage all projects")
 stageAll := {
