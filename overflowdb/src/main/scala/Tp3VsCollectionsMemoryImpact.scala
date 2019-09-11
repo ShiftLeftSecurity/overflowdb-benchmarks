@@ -28,6 +28,15 @@ object MemoryImpactScalaCollections extends App {
         vertex.vertices(Direction.OUT).asScala
       }
     }.size
+
+//    var results = 0
+//    graph.vertices().asScala.foreach { vertex =>
+//      vertex.vertices(Direction.OUT).asScala.foreach { vertex =>
+//        vertex.vertices(Direction.OUT).asScala.foreach { _ =>
+//          results += 1
+//        }
+//      }
+//    }
     assert(results == 327370)
   }
 
@@ -43,7 +52,7 @@ object MemoryImpactTp3 extends App {
         __(trav.get).out()
       }: JIterator[Vertex]
     }.toStream.count
-
+//    val results = graph.traversal().V().out().out().count().next()
     assert(results == 327370)
   }
 

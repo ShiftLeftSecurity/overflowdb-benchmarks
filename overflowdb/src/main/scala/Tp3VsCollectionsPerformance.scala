@@ -1,36 +1,31 @@
 import Benchmarks.{loadGratefulDead, timed}
 import io.shiftleft.overflowdb.traversals.testdomains.gratefuldead.GratefulDead
 import org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.__.__
+import org.apache.tinkerpop.gremlin.process.traversal.strategy.optimization.LazyBarrierStrategy
 import org.apache.tinkerpop.gremlin.structure.{Direction, Graph, Vertex}
 
 import scala.jdk.CollectionConverters._
 
 
 /**
- * compare performance of tinkerpop3 and standard collections.
- *
- * // TODO compare repeat
+ * compare performance for V.out.out.out between tinkerpop3 and standard collections.
  *
  * timings on my machine:
- * tp3: V.out.out: 3.608683
- * tp3: V.out.out.out: 45.1047
- * java while loop: V.out.out: 2.8279471
- * java while loop: V.out.out.out: 80.289375
- * java forEach: V.out.out: 3.236158
- * java forEach: V.out.out.out: 212.36609
- * scala foreach: V.out.out: 3.604994
- * scala foreach: V.out.out.out: 224.15091
- * scala map, flatten at the end: V.out.out: 14.646321
- * scala map.flatten every step: V.out.out: 31.522526
- * tp3 flatMap: V.out.out: 63.30443
- * tp3 flatMap: V.out.out.out: 3093.839
- * scala flatMap: V.out.out: 31.73666
- * scala flatMap: V.out.out.out: 3123.2524
+ * tp3: 46.73538
+ * tp3 without bulking: 428.08582
+ * java while loop: 76.96792
+ * java forEach: 109.39187
+ * scala foreach: 245.60551
+ * scala map: 513.7993
+ * tp3 flatMap: 3194.6401
+ * tp3 flatMap no bulking: 3182.7358
+ * scala flatMap: 3131.0464
  *
  * interpretation:
- * 1) when doing two hops, collections are on par with tp. from 3 hops onwards (without looking at intermediate results) tp3 is faster
- * 2) flatMap is always more expensive, but standard collections are roughly twice as fast as tinkerpop
+ * 1) tp3 is only faster due to bulking - this is flawed to to using a miniscule graph. when disabling, that's gone
+ * 2) standard collections are roughly twice as fast as tinkerpop
  * 3) map is more expensive than foreach
+ * 4) flatMap is way more expensive than map
  */
 object Tp3VsCollectionsPerformance extends App {
   benchmark(GratefulDead.newGraph)
@@ -41,7 +36,8 @@ object Tp3VsCollectionsPerformance extends App {
     testSetups.foreach { test =>
       val millis = timed(test.iterations) { () =>
         val results = test.traversal(graph)
-        assert(results == test.expectedResults, s"expected ${test.expectedResults} results, but got $results")
+        val expectedResults = 14465066
+        assert(results == expectedResults, s"expected $expectedResults results, but got $results")
       }
       println(s"${test.description}: $millis")
     }
@@ -50,46 +46,23 @@ object Tp3VsCollectionsPerformance extends App {
 
   case class TestSetup(description: String,
                        traversal: Graph => Long,
-                       expectedResults: Long,
                        iterations: Int)
 
   lazy val testSetups = List(
     TestSetup(
       "warmup",
-      _.traversal().V().out().out().toList.size,
-      expectedResults = 327370,
+      _.traversal().V().out().out().out().toList.size,
       iterations = 100),
 
-    TestSetup("tp3: V.out.out",
-      _.traversal().V().out().out().toStream().count(),
-      expectedResults = 327370,
-      iterations = 100),
-
-    TestSetup("tp3: V.out.out.out",
+    TestSetup("tp3",
       _.traversal().V().out().out().out().toStream().count(),
-      expectedResults = 14465066,
-      iterations = 100),
+      iterations = 200),
 
-    TestSetup("java while loop: V.out.out",
-      graph => {
-        var results = 0
-        val iter0 = graph.vertices()
-        while (iter0.hasNext) {
-          val iter1 = iter0.next().vertices(Direction.OUT)
-          while (iter1.hasNext) {
-            val iter2 = iter1.next().vertices(Direction.OUT)
-            while (iter2.hasNext) {
-              iter2.next()
-              results += 1
-            }
-          }
-        }
-        results
-      },
-      expectedResults = 327370,
-      iterations = 100),
+    TestSetup("tp3 without bulking",
+      _.traversal().withoutStrategies(classOf[LazyBarrierStrategy]).V().out().out().out().toStream().count(),
+      iterations = 20),
 
-    TestSetup("java while loop: V.out.out.out",
+    TestSetup("java while loop",
       graph => {
         var results = 0
         val iter0 = graph.vertices()
@@ -108,25 +81,9 @@ object Tp3VsCollectionsPerformance extends App {
         }
         results
       },
-      expectedResults = 14465066,
-      iterations = 100),
+      iterations = 200),
 
-    TestSetup("java forEach: V.out.out",
-      graph => {
-        var results = 0
-        graph.vertices().forEachRemaining(
-          _.vertices(Direction.OUT).forEachRemaining(
-            _.vertices(Direction.OUT).forEachRemaining { _ =>
-              results += 1
-            }
-          )
-        )
-        results
-      },
-      expectedResults = 327370,
-      iterations = 100),
-
-    TestSetup("java forEach: V.out.out.out",
+    TestSetup("java forEach",
       graph => {
         var results = 0
         graph.vertices().forEachRemaining(
@@ -140,25 +97,9 @@ object Tp3VsCollectionsPerformance extends App {
         )
         results
       },
-      expectedResults = 14465066,
-      iterations = 100),
+      iterations = 200),
 
-    TestSetup("scala foreach: V.out.out",
-      graph => {
-        var results = 0
-        graph.vertices().asScala.foreach(
-          _.vertices(Direction.OUT).asScala.foreach(
-            _.vertices(Direction.OUT).asScala.foreach { _ =>
-              results += 1
-            }
-          )
-        )
-        results
-      },
-      expectedResults = 327370,
-      iterations = 100),
-
-    TestSetup("scala foreach: V.out.out.out",
+    TestSetup("scala foreach",
       graph => {
         var results = 0
         graph.vertices().asScala.foreach(
@@ -172,41 +113,23 @@ object Tp3VsCollectionsPerformance extends App {
         )
         results
       },
-      expectedResults = 14465066,
-      iterations = 100),
+      iterations = 200),
 
-    TestSetup("scala map, flatten at the end: V.out.out",
-      _.vertices().asScala.map { vertex =>
-        vertex.vertices(Direction.OUT).asScala.map { vertex =>
-          vertex.vertices(Direction.OUT).asScala.map { vertex =>
-            1
-          }
-        }
-      }.flatten.flatten.sum,
-      expectedResults = 327370,
-      iterations = 100),
+    TestSetup("scala map",
+      graph => {
+        graph.vertices().asScala.map(
+          _.vertices(Direction.OUT).asScala.map(
+            _.vertices(Direction.OUT).asScala.map(
+              _.vertices(Direction.OUT).asScala.map { _ =>
+                1
+              }
+            )
+          )
+        ).flatten.flatten.flatten.sum
+      },
+      iterations = 200),
 
-    TestSetup("scala map.flatten every step: V.out.out",
-      _.vertices().asScala.map { vertex =>
-        vertex.vertices(Direction.OUT).asScala.map { vertex =>
-          vertex.vertices(Direction.OUT).asScala.toSeq.map { vertex =>
-            1
-          }
-        }.flatten
-      }.flatten.sum,
-      expectedResults = 327370,
-      iterations = 100),
-
-    TestSetup("tp3 flatMap: V.out.out",
-      _.traversal.V().flatMap { trav =>
-        __(trav.get).out().flatMap { trav =>
-          __(trav.get).out()
-        }: java.util.Iterator[Vertex]
-      }.count().next().toInt,
-      expectedResults = 327370,
-      iterations = 100),
-
-    TestSetup("tp3 flatMap: V.out.out.out",
+    TestSetup("tp3 flatMap",
       _.traversal.V().flatMap { trav =>
         __(trav.get).out().flatMap { trav =>
           __(trav.get).out().flatMap { trav =>
@@ -214,19 +137,19 @@ object Tp3VsCollectionsPerformance extends App {
           }
         }: java.util.Iterator[Vertex]
       }.count().next().toInt,
-      expectedResults = 14465066,
-      iterations = 10),
+      iterations = 20),
 
-    TestSetup("scala flatMap: V.out.out",
-      _.vertices().asScala.flatMap(
-        _.vertices(Direction.OUT).asScala.flatMap(
-          _.vertices(Direction.OUT).asScala
-        )
-      ).size,
-      expectedResults = 327370,
-      iterations = 100),
+    TestSetup("tp3 flatMap no bulking",
+      _.traversal.withoutStrategies(classOf[LazyBarrierStrategy]).V().flatMap { trav =>
+        __(trav.get).out().flatMap { trav =>
+          __(trav.get).out().flatMap { trav =>
+            __(trav.get).out()
+          }
+        }: java.util.Iterator[Vertex]
+      }.count().next().toInt,
+      iterations = 20),
 
-    TestSetup("scala flatMap: V.out.out.out",
+    TestSetup("scala flatMap",
       _.vertices().asScala.flatMap(
         _.vertices(Direction.OUT).asScala.flatMap(
           _.vertices(Direction.OUT).asScala.flatMap(
@@ -234,7 +157,6 @@ object Tp3VsCollectionsPerformance extends App {
           )
         )
       ).size,
-      expectedResults = 14465066,
-      iterations = 10),
+      iterations = 20),
   )
 }
